@@ -3,9 +3,8 @@ import urllib.request
 import zipfile
 import tempfile
 
-# Check and auto-download ffmpeg
+# Check and auto-download dependencies
 local_dir = os.path.dirname(os.path.abspath(__file__))
-local_ffmpeg = os.path.join(local_dir, "ffmpeg.exe")
 local_soundstretch = os.path.join(local_dir, "soundstretch.exe")
 
 def download_soundstretch():
@@ -49,31 +48,18 @@ def download_soundstretch():
         shutil.rmtree(temp_dir, ignore_errors=True)
         return False
 
-# Check and setup ffmpeg
-if os.path.exists(local_ffmpeg):
-    print("[OK] ffmpeg found in local directory")
-else:
-    # Check system ffmpeg
-    try:
-        result = subprocess.run(["ffmpeg", "-version"], capture_output=True)
-        if result.returncode == 0:
-            print("[OK] System ffmpeg found")
-        else:
-            raise FileNotFoundError
-    except FileNotFoundError:
-        # Need to download ffmpeg
-        try:
-            import imageio_ffmpeg
-            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-            
-            # Copy ffmpeg to local directory
-            try:
-                shutil.copy2(ffmpeg_path, local_ffmpeg)
-                print("[OK] ffmpeg copied to local directory")
-            except Exception:
-                print("[OK] Using imageio-ffmpeg's ffmpeg")
-        except Exception:
-            print("[WARNING] Could not setup ffmpeg automatically")
+# Check ffmpeg availability (使用 imageio-ffmpeg，不需要複製到本地)
+try:
+    import imageio_ffmpeg
+    ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+    if ffmpeg_path and os.path.exists(ffmpeg_path):
+        print("[OK] ffmpeg available via imageio-ffmpeg")
+    else:
+        print("[WARNING] imageio-ffmpeg installed but ffmpeg not found")
+except ImportError:
+    print("[WARNING] imageio-ffmpeg not installed. Run: pip install imageio-ffmpeg")
+except Exception as e:
+    print(f"[WARNING] Could not check ffmpeg: {e}")
 
 # Check and setup soundstretch
 if os.path.exists(local_soundstretch):

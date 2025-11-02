@@ -43,19 +43,25 @@ def find_exec(name):
     return alt if os.path.exists(alt) else None
 
 def get_ffmpeg():
-    """取得 ffmpeg 執行檔路徑，優先使用 imageio-ffmpeg 下載的版本"""
-    # 先檢查本地目錄
+    """取得 ffmpeg 執行檔路徑，優先使用 imageio-ffmpeg（輕量且自動管理）"""
+    # 優先使用 imageio-ffmpeg（自動管理，無需手動下載）
+    try:
+        import imageio_ffmpeg
+        ff = imageio_ffmpeg.get_ffmpeg_exe()
+        if ff:
+            return ff
+    except ImportError:
+        pass
+    
+    # 備選：檢查本地目錄
     ff = find_exec("ffmpeg")
     if ff:
         return ff
     
-    # 嘗試使用 imageio-ffmpeg
-    try:
-        import imageio_ffmpeg
-        ff = imageio_ffmpeg.get_ffmpeg_exe()
-        return ff
-    except ImportError:
-        pass
+    # 備選：檢查系統 PATH
+    path = shutil.which("ffmpeg")
+    if path:
+        return path
     
     return None
 
@@ -112,13 +118,26 @@ def get_samplerate(path):
     # 如果偵測失敗，預設使用 48000
     return 48000
 
-def download_and_transpose(url, semitones, progress_callback=None):
+def get_default_output_dir():
+    """取得預設輸出目錄（Windows Downloads 資料夾）"""
+    try:
+        # 獲取 Windows Downloads 資料夾路徑
+        downloads_path = os.path.join(os.path.expanduser("~"), "Downloads")
+        if os.path.exists(downloads_path):
+            return downloads_path
+        # 如果 Downloads 不存在，回退到當前目錄的 downloads 資料夾
+        return os.path.join(os.getcwd(), "downloads")
+    except:
+        # 如果出錯，使用當前目錄的 downloads 資料夾
+        return os.path.join(os.getcwd(), "downloads")
+
+def download_and_transpose(url, semitones, progress_callback=None, output_dir=None):
     # yt-dlp 改用 Python 模組模式執行
     yt = [sys.executable, "-m", "yt_dlp"]
     ff = get_ffmpeg()
     
     if not ff: 
-        raise Exception("ffmpeg not found, please run python setup_env.py first")
+        raise Exception("ffmpeg not found. Please install imageio-ffmpeg: pip install imageio-ffmpeg")
     
     # 獲取標題
     if progress_callback:
@@ -126,27 +145,41 @@ def download_and_transpose(url, semitones, progress_callback=None):
     title = subprocess.run([*yt, "--get-title", url], capture_output=True, text=True).stdout.strip()
     title = sanitize_filename(title)
     
-    os.makedirs("downloads", exist_ok=True)
+    # 決定輸出目錄
+    if output_dir is None:
+        output_dir = get_default_output_dir()
+    
+    # 確保輸出目錄存在
+    os.makedirs(output_dir, exist_ok=True)
     
     # 需要轉調的情況
-    input_path = f"downloads/{title}.mp3"
+    input_path = os.path.join(output_dir, f"{title}.mp3")
     
     if semitones == 0:
         # 沒有調整音高，直接下載原版就好
         output_path = input_path
     else:
         # 需要轉調
-        output_path = f"downloads/{title}_transpose_{semitones:+}.mp3"
+        output_path = os.path.join(output_dir, f"{title}_transpose_{semitones:+}.mp3")
     
     # 檢查是否已有原檔存在，記錄是否需要刪除原檔
     was_downloaded = False
     if not os.path.exists(input_path):
-        # 下載
+        # 下載（確保 yt-dlp 能找到 ffmpeg）
         if progress_callback:
             progress_callback(30, f"Downloading: {title}")
         print(f"Downloading: {title}")
-        result = subprocess.run([*yt, "-x", "--audio-format", "mp3", "-o", input_path, url], 
-                              capture_output=True, text=True)
+        
+        # 構建 yt-dlp 命令，指定 ffmpeg 位置
+        yt_cmd = [*yt, "-x", "--audio-format", "mp3", "-o", input_path]
+        
+        # 如果找到 ffmpeg，告訴 yt-dlp 它的位置
+        # --ffmpeg-location 可以接受目錄或執行檔路徑
+        if ff:
+            # 直接指定 ffmpeg 執行檔路徑（yt-dlp 會自動找同目錄的 ffprobe，如果沒有就只使用 ffmpeg）
+            yt_cmd.extend(["--ffmpeg-location", ff])
+        
+        result = subprocess.run(yt_cmd + [url], capture_output=True, text=True)
         if result.returncode != 0:
             raise Exception(f"Download failed: {result.stderr}")
         was_downloaded = True

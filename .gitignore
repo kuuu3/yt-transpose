@@ -9,6 +9,7 @@ __pycache__/
 # 環境檔案
 .env
 .DS_Store
+config.json
 
 # 執行檔（會自動下載）
 ffmpeg.exe

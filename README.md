@@ -1,6 +1,6 @@
 # YouTube 轉調工具
 
-一個功能完整的工具，用於下載 YouTube 影片的音訊並進行音調轉換。
+一個用於下載 YouTube 影片的音訊並進行音調轉換的工具。
 
 ##  專案結構
 
@@ -15,7 +15,6 @@ yt_transpose/
 ├── requirements.txt    # Python 套件
 ├── run.bat             # Windows 一鍵啟動（呼叫 run.vbs）
 ├── run.vbs             # VBScript 啟動腳本（無視窗）
-├── ffmpeg.exe          # ffmpeg 執行檔（自動下載）
 ├── soundstretch.exe    # SoundTouch CLI（自動下載）
 └── downloads/          # 音檔輸出目錄
 ```
@@ -35,8 +34,8 @@ python setup_env.py
 ```
 
 此腳本會自動：
--  檢查並下載 `ffmpeg.exe`（如果沒有）- 用於音訊格式轉換（MP3 ↔ WAV）
--  自動下載 `soundstretch.exe`（從官方網站）- 用於高品質音調轉換
+- ✅ 檢查 `imageio-ffmpeg`（用於音訊格式轉換，自動管理，無需手動下載）
+- ✅ 自動下載 `soundstretch.exe`（從官方網站）- 用於高品質音調轉換
 
 **如果自動下載失敗**，請手動下載：
 
@@ -45,7 +44,10 @@ python setup_env.py
 3. 解壓縮並找到 `soundstretch.exe`
 4. 將 `soundstretch.exe` 複製到專案目錄
 
-**注意**：首次執行時需要網路連線以下載依賴。
+**注意**：
+- 首次執行時需要網路連線以下載依賴
+- `imageio-ffmpeg` 會在安裝時自動下載 ffmpeg，無需手動管理
+- 只有 `soundstretch.exe` 會下載到專案目錄
 
 ###  GUI 圖形介面
 
@@ -91,8 +93,9 @@ python batch_transpose.py
 
 ### 依賴工具
 
-1. **ffmpeg.exe**（自動下載）
+1. **imageio-ffmpeg**（Python 套件，自動管理）
    - **用途**：音訊格式轉換
+   - **優勢**：輕量且自動管理，無需手動下載 ffmpeg.exe
    - **原因**：
      - yt-dlp 下載的是 MP3 格式
      - soundstretch 只支援 WAV 格式

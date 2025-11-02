@@ -1,0 +1,28 @@
+# 輸出目錄
+downloads/
+
+# Python 快取
+__pycache__/
+*.pyc
+*.pyo
+
+# 環境檔案
+.env
+.DS_Store
+
+# 執行檔（會自動下載）
+ffmpeg.exe
+ffmpeg
+ffmpeg-*
+soundstretch.exe
+soundstretch
+soundstretch*.zip
+soundstretch-*/
+
+# 編輯器設定
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+

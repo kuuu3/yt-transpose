@@ -99,8 +99,15 @@ else:
             print("  choco install soundtouch")
             print("\n完成後，請重新執行此腳本驗證安裝。")
             
-            # 不退出，允許用戶手動下載後繼續
-            choice = input("\n是否要繼續（已手動下載 soundstretch.exe）？[y/N]: ")
-            if choice.lower() != 'y':
-                sys.exit(1)
+            # 檢查是否在互動模式下執行
+            if sys.stdin.isatty():
+                # 互動模式（直接在終端執行），等待用戶輸入
+                choice = input("\n是否要繼續（已手動下載 soundstretch.exe）？[y/N]: ")
+                if choice.lower() != 'y':
+                    sys.exit(1)
+            else:
+                # 非互動模式（由 run.vbs 調用），直接繼續，不等待輸入
+                print("\n[WARNING] soundstretch not found, but continuing anyway...")
+                print("請手動下載 soundstretch.exe 並放置在此目錄以使用完整功能")
+                # 不退出，讓 app.py 可以正常啟動
 

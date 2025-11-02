@@ -11,10 +11,7 @@ WshShell.Run "python setup_env.py", 0, True
 On Error Goto 0
 
 ' 執行 app.py（顯示視窗）
-' 如果出錯，可以用 cmd /k 來保持視窗打開以便查看錯誤訊息
-' WshShell.Run "cmd /k python app.py", 1, False
 WshShell.Run "python app.py", 1, False
 Set WshShell = Nothing
 Set fso = Nothing
-
 

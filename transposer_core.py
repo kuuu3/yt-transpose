@@ -131,7 +131,7 @@ def get_default_output_dir():
         # 如果出錯，使用當前目錄的 downloads 資料夾
         return os.path.join(os.getcwd(), "downloads")
 
-def download_and_transpose(url, semitones, progress_callback=None, output_dir=None):
+def download_and_transpose(url, semitones, progress_callback=None, output_dir=None, tempo=None, rate=None, bpm=None):
     # yt-dlp 改用 Python 模組模式執行
     yt = [sys.executable, "-m", "yt_dlp"]
     ff = get_ffmpeg()
@@ -152,15 +152,38 @@ def download_and_transpose(url, semitones, progress_callback=None, output_dir=No
     # 確保輸出目錄存在
     os.makedirs(output_dir, exist_ok=True)
     
-    # 需要轉調的情況
+    # 輸入檔案路徑
     input_path = os.path.join(output_dir, f"{title}.mp3")
     
-    if semitones == 0:
-        # 沒有調整音高，直接下載原版就好
-        output_path = input_path
+    # 決定是否需要處理和輸出檔案名稱
+    # 只有當參數不是預設值時才需要處理
+    needs_processing = (
+        semitones != 0 or 
+        (tempo is not None and tempo != 0.0) or 
+        (rate is not None and rate != 0.0) or 
+        (bpm is not None and bpm != 120)
+    )
+    
+    if needs_processing:
+        # 生成描述性的檔案名稱
+        parts = []
+        if bpm is not None:
+            parts.append(f"bpm{bpm:.0f}")
+        elif rate is not None:
+            parts.append(f"rate{rate:+.1f}")
+        else:
+            if semitones != 0:
+                parts.append(f"pitch{semitones:+}")
+            if tempo is not None:
+                parts.append(f"tempo{tempo:+.1f}")
+        
+        if parts:
+            output_path = os.path.join(output_dir, f"{title}_{'_'.join(parts)}.mp3")
+        else:
+            output_path = input_path
     else:
-        # 需要轉調
-        output_path = os.path.join(output_dir, f"{title}_transpose_{semitones:+}.mp3")
+        # 沒有處理，直接使用原始檔名
+        output_path = input_path
     
     # 檢查是否已有原檔存在，記錄是否需要刪除原檔
     was_downloaded = False
@@ -184,8 +207,9 @@ def download_and_transpose(url, semitones, progress_callback=None, output_dir=No
             raise Exception(f"Download failed: {result.stderr}")
         was_downloaded = True
     
-    # 如果需要轉調
-    if semitones != 0:
+    # 如果需要處理（轉調、速度調整等）
+    needs_processing = (semitones != 0 or tempo is not None or rate is not None or bpm is not None)
+    if needs_processing:
         # 刪除已存在的輸出檔案
         if os.path.exists(output_path):
             try:
@@ -211,10 +235,23 @@ def download_and_transpose(url, semitones, progress_callback=None, output_dir=No
         
         soundstretch = get_soundstretch()
         
-        # 轉調 - 使用 SoundTouch CLI (soundstretch)
+        # 處理 - 使用 SoundTouch CLI (soundstretch)
         if progress_callback:
-            progress_callback(70, f"Transposing: {semitones:+} semitones (using SoundTouch CLI)")
-        print(f"Transposing: {semitones:+} semitones (using SoundTouch CLI)")
+            if bpm is not None:
+                progress_callback(70, f"Processing: Adjusting to {bpm} BPM (using SoundTouch CLI)")
+                print(f"Processing: Adjusting to {bpm} BPM (using SoundTouch CLI)")
+            elif rate is not None:
+                progress_callback(70, f"Processing: Rate {rate:+.1f}% (using SoundTouch CLI)")
+                print(f"Processing: Rate {rate:+.1f}% (using SoundTouch CLI)")
+            else:
+                msg_parts = []
+                if semitones != 0:
+                    msg_parts.append(f"Pitch {semitones:+} semitones")
+                if tempo is not None:
+                    msg_parts.append(f"Tempo {tempo:+.1f}%")
+                msg = ", ".join(msg_parts) if msg_parts else "Processing"
+                progress_callback(70, f"{msg} (using SoundTouch CLI)")
+                print(f"{msg} (using SoundTouch CLI)")
         
         # soundstretch 需要 WAV 格式，使用臨時檔案（系統臨時目錄，處理完自動清理）
         temp_wav_input = None
@@ -249,15 +286,31 @@ def download_and_transpose(url, semitones, progress_callback=None, output_dir=No
             if result.returncode != 0:
                 raise Exception(f"Failed to convert MP3 to WAV: {result.stderr}")
             
-            # 使用 soundstretch 進行音調轉換
+            # 使用 soundstretch 進行音調轉換和處理
             if progress_callback:
                 progress_callback(80, "Processing with SoundTouch...")
+            
+            # 構建 soundstretch 命令參數
             soundstretch_cmd = [
                 soundstretch,
                 temp_wav_input,
-                temp_wav_output,
-                f"-pitch={semitones:.2f}"
+                temp_wav_output
             ]
+            
+            # 添加處理參數（按優先級：BPM > rate > tempo + pitch）
+            if bpm is not None:
+                # BPM 模式：檢測並調整到指定 BPM
+                soundstretch_cmd.append(f"-bpm={bpm}")
+            elif rate is not None:
+                # Rate 模式：同時改變速度和音調
+                soundstretch_cmd.append(f"-rate={rate:.2f}")
+            else:
+                # 預設模式：分別控制 pitch 和 tempo
+                if semitones != 0:
+                    soundstretch_cmd.append(f"-pitch={semitones:.2f}")
+                if tempo is not None:
+                    soundstretch_cmd.append(f"-tempo={tempo:.2f}")
+            
             result = subprocess.run(soundstretch_cmd, capture_output=True, text=True)
             if result.returncode != 0:
                 raise Exception(f"SoundTouch processing failed: {result.stderr}")

@@ -213,8 +213,13 @@ def download_and_transpose(url, semitones, progress_callback=None, output_dir=No
     try:
         # 決定是否需要處理和輸出檔案名稱
         # 只有當參數不是預設值時才需要處理
+        # 正規化 semitones：確保接近零的值不被視為需要處理
+        normalized_semitones = round(float(semitones), 2) if semitones != 0 else 0.0
+        if abs(normalized_semitones) < 0.01:
+            normalized_semitones = 0.0
+        
         needs_processing = (
-            semitones != 0 or 
+            normalized_semitones != 0 or 
             (tempo is not None and tempo != 0.0) or 
             (rate is not None and rate != 0.0) or 
             (bpm is not None and bpm != 120)
@@ -234,12 +239,13 @@ def download_and_transpose(url, semitones, progress_callback=None, output_dir=No
             
             # 預設模式：顯示 transpose 和 tempo（根據實際值）
             else:
-                if semitones != 0:
+                # 使用正規化後的 semitones
+                if normalized_semitones != 0:
                     # 如果是整數，不顯示小數點；如果是浮點數，顯示最多兩位小數
-                    if semitones == int(semitones):
-                        parts.append(f"transpose{int(semitones):+}")
+                    if normalized_semitones == int(normalized_semitones):
+                        parts.append(f"transpose{int(normalized_semitones):+}")
                     else:
-                        parts.append(f"transpose{semitones:+.2f}")
+                        parts.append(f"transpose{normalized_semitones:+.2f}")
                 if tempo is not None and tempo != 0.0:
                     parts.append(f"tempo{tempo:+.1f}")
         
@@ -453,8 +459,9 @@ def download_and_transpose(url, semitones, progress_callback=None, output_dir=No
                     print(f"Processing: Rate {rate:+.1f}% (using SoundTouch CLI)")
                 else:
                     msg_parts = []
-                    if semitones != 0:
-                        msg_parts.append(f"Transpose {semitones:+} semitones")
+                    # 使用正規化後的 semitones
+                    if normalized_semitones != 0:
+                        msg_parts.append(f"Transpose {normalized_semitones:+} semitones")
                     if tempo is not None:
                         msg_parts.append(f"Tempo {tempo:+.1f}%")
                     msg = ", ".join(msg_parts) if msg_parts else "Processing"
@@ -492,16 +499,24 @@ def download_and_transpose(url, semitones, progress_callback=None, output_dir=No
                 ]
                 
                 # 添加處理參數（按優先級：BPM > rate > tempo + transpose）
+                # 注意：BPM 和 rate 模式也會支援 pitch 調整
                 if bpm is not None:
                     # BPM 模式：檢測並調整到指定 BPM
                     soundstretch_cmd.append(f"-bpm={bpm}")
+                    # BPM 模式下也支援 pitch 調整（使用正規化後的 semitones）
+                    if normalized_semitones != 0:
+                        soundstretch_cmd.append(f"-pitch={normalized_semitones:.2f}")
                 elif rate is not None:
                     # Rate 模式：同時改變速度和音調
                     soundstretch_cmd.append(f"-rate={rate:.2f}")
+                    # Rate 模式下也支援額外的 pitch 調整（使用正規化後的 semitones）
+                    if normalized_semitones != 0:
+                        soundstretch_cmd.append(f"-pitch={normalized_semitones:.2f}")
                 else:
                     # 預設模式：分別控制 transpose 和 tempo
-                    if semitones != 0:
-                        soundstretch_cmd.append(f"-pitch={semitones:.2f}")
+                    # 使用正規化後的 semitones
+                    if normalized_semitones != 0:
+                        soundstretch_cmd.append(f"-pitch={normalized_semitones:.2f}")
                     if tempo is not None:
                         soundstretch_cmd.append(f"-tempo={tempo:.2f}")
                 

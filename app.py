@@ -368,12 +368,19 @@ def main(page: ft.Page):
             output_dir_field.value = output_dir
         
         # 取得處理參數（優先使用 pitch，如果為 0 則使用 transpose）
-        # 如果 pitch 有設定，使用 pitch；否則使用 transpose
-        # 注意：pitch_value 已經在 update_pitch() 中正規化，接近零的值已設為 0.0
-        if pitch_value != 0.0:
-            semitones = float(pitch_value)
+        # 正規化 pitch 值：確保接近零的值被設為零
+        normalized_pitch = round(float(pitch_value), 2)
+        if abs(normalized_pitch) < 0.01:
+            normalized_pitch = 0.0
+        
+        # 正規化 transpose 值：使用 round 而不是 int，避免截斷問題
+        normalized_transpose = round(float(transpose_slider.value))
+        
+        # 如果 pitch 有設定（不為零），使用 pitch；否則使用 transpose
+        if normalized_pitch != 0.0:
+            semitones = normalized_pitch
         else:
-            semitones = round(transpose_slider.value)
+            semitones = float(normalized_transpose)
         tempo_val = None
         rate_val = None
         bpm_val = None
@@ -388,12 +395,16 @@ def main(page: ft.Page):
         elif mode == "rate":
             # 正規化 rate 值：四捨五入到1位小數，接近零的值設為零
             rate_value = round(float(speed_slider.value), 1)
-            if abs(rate_value) >= 0.1:  # 預設值是 0.0，允許 0.1 的誤差
+            if abs(rate_value) < 0.1:  # 接近零的值設為零
+                rate_value = 0.0
+            if rate_value != 0.0:  # 預設值是 0.0
                 rate_val = rate_value
         else:  # tempo
             # 正規化 tempo 值：四捨五入到1位小數，接近零的值設為零
             tempo_value = round(float(speed_slider.value), 1)
-            if abs(tempo_value) >= 0.1:  # 預設值是 0.0，允許 0.1 的誤差
+            if abs(tempo_value) < 0.1:  # 接近零的值設為零
+                tempo_value = 0.0
+            if tempo_value != 0.0:  # 預設值是 0.0
                 tempo_val = tempo_value
         
         # 在背景執行緒執行下載和轉調
@@ -401,10 +412,17 @@ def main(page: ft.Page):
             try:
                 def progress_callback(value, msg):
                     def update_ui():
-                        progress_bar.value = value / 100.0
-                        status_text.value = msg
-                        status_text.color = COLORS['text_muted']
-                        page.update()
+                        try:
+                            progress_bar.value = value / 100.0
+                            status_text.value = msg
+                            status_text.color = COLORS['text_muted']
+                            page.update()
+                        except AssertionError:
+                            # Flet 要求在主線程中更新，這個錯誤是預期的
+                            pass
+                        except Exception as e:
+                            # 記錄其他意外的錯誤
+                            logging.error(f"更新進度時發生錯誤: {e}", exc_info=True)
                     
                     # 使用輔助函數在主線程執行更新
                     invoke_on_main_thread(update_ui)
@@ -412,22 +430,39 @@ def main(page: ft.Page):
                 download_and_transpose(url, semitones, progress_callback, output_dir, tempo_val, rate_val, bpm_val)
                 # 成功完成
                 def update_success():
-                    start_button.disabled = False
-                    start_button.bgcolor = COLORS['success']
-                    status_text.value = f"完成！檔案已儲存至：{output_dir}"
-                    status_text.color = COLORS['success']
-                    page.update()
+                    try:
+                        start_button.disabled = False
+                        start_button.bgcolor = COLORS['success']
+                        status_text.value = f"完成！檔案已儲存至：{output_dir}"
+                        status_text.color = COLORS['success']
+                        page.update()
+                    except AssertionError:
+                        # Flet 要求在主線程中更新，這個錯誤是預期的
+                        pass
+                    except Exception as e:
+                        # 記錄其他意外的錯誤
+                        logging.error(f"更新成功狀態時發生錯誤: {e}", exc_info=True)
                 
                 # 使用輔助函數在主線程執行更新
                 invoke_on_main_thread(update_success)
             except Exception as e:
+                # 記錄錯誤
+                logging.error(f"下載處理失敗: {e}", exc_info=True)
+                
                 def update_error():
-                    progress_bar.value = 0
-                    start_button.disabled = False
-                    start_button.bgcolor = COLORS['success']
-                    status_text.value = f"錯誤：{str(e)}"
-                    status_text.color = COLORS['danger']
-                    page.update()
+                    try:
+                        progress_bar.value = 0
+                        start_button.disabled = False
+                        start_button.bgcolor = COLORS['success']
+                        status_text.value = f"錯誤：{str(e)}"
+                        status_text.color = COLORS['danger']
+                        page.update()
+                    except AssertionError:
+                        # Flet 要求在主線程中更新，這個錯誤是預期的
+                        pass
+                    except Exception as update_err:
+                        # 記錄其他意外的錯誤
+                        logging.error(f"更新錯誤狀態時發生錯誤: {update_err}", exc_info=True)
                 
                 # 使用輔助函數在主線程執行更新
                 invoke_on_main_thread(update_error)

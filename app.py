@@ -78,6 +78,18 @@ def main(page: ft.Page):
         nonlocal update_timer_running
         update_timer_running = False
     
+    # 輔助函數：在主線程中執行 UI 更新
+    def invoke_on_main_thread(update_func):
+        """在主線程中執行 UI 更新函數，優先使用 Flet 的 API，否則使用隊列機制"""
+        if hasattr(page, 'invoke_later'):
+            page.invoke_later(update_func)
+        elif hasattr(page, 'call_later'):
+            page.call_later(0.0, update_func)
+        else:
+            # 備選方案：使用隊列機制
+            update_queue.put(update_func)
+            start_update_timer()
+    
     # 全局 tkinter 根視窗（用於文件對話框，避免重複創建）
     tk_root = None
     
@@ -191,7 +203,7 @@ def main(page: ft.Page):
     
     def update_transpose(value, value_text, scale_var):
         nonlocal transpose_value
-        transpose_value = int(value)
+        transpose_value = round(value)
         value_text.value = str(transpose_value)
         try:
             page.update()
@@ -225,13 +237,20 @@ def main(page: ft.Page):
     
     def update_speed(value, value_text, unit_text, mode):
         nonlocal speed_value, speed_mode
-        speed_value = float(value)
+        raw_value = float(value)
         speed_mode = speed_mode_dropdown.value
         
+        # 正規化 speed 值，避免浮點數精度問題
         if mode == "bpm":
-            value_text.value = f"{int(speed_value)}"
+            # BPM 模式：四捨五入為整數
+            speed_value = round(raw_value)
+            value_text.value = f"{int(speed_value)}"  # 使用 int() 確保顯示為整數
             unit_text.value = "bpm"
         else:
+            # Tempo/Rate 模式：四捨五入到1位小數，接近零的值設為零
+            speed_value = round(raw_value, 1)
+            if abs(speed_value) < 0.1:
+                speed_value = 0.0
             value_text.value = f"{speed_value:.1f}"
             unit_text.value = "%"
         try:
@@ -362,16 +381,19 @@ def main(page: ft.Page):
         # 根據 Speed 模式決定參數（只有當值不是預設值時才傳遞）
         mode = speed_mode_dropdown.value
         if mode == "bpm":
-            bpm_value = float(speed_slider.value)
+            # 正規化 BPM 值：四捨五入為整數，避免浮點數精度問題
+            bpm_value = round(float(speed_slider.value))
             if bpm_value != 120:  # 預設值是 120
-                bpm_val = bpm_value
+                bpm_val = float(bpm_value)
         elif mode == "rate":
-            rate_value = float(speed_slider.value)
-            if rate_value != 0.0:  # 預設值是 0.0
+            # 正規化 rate 值：四捨五入到1位小數，接近零的值設為零
+            rate_value = round(float(speed_slider.value), 1)
+            if abs(rate_value) >= 0.1:  # 預設值是 0.0，允許 0.1 的誤差
                 rate_val = rate_value
         else:  # tempo
-            tempo_value = float(speed_slider.value)
-            if tempo_value != 0.0:  # 預設值是 0.0
+            # 正規化 tempo 值：四捨五入到1位小數，接近零的值設為零
+            tempo_value = round(float(speed_slider.value), 1)
+            if abs(tempo_value) >= 0.1:  # 預設值是 0.0，允許 0.1 的誤差
                 tempo_val = tempo_value
         
         # 在背景執行緒執行下載和轉調
@@ -384,14 +406,8 @@ def main(page: ft.Page):
                         status_text.color = COLORS['text_muted']
                         page.update()
                     
-                    # 使用 page.invoke_later() 或 page.call_later() 在主線程執行更新
-                    if hasattr(page, 'invoke_later'):
-                        page.invoke_later(update_ui)
-                    elif hasattr(page, 'call_later'):
-                        page.call_later(0.0, update_ui)
-                    else:
-                        # 備選方案：使用隊列機制
-                        update_queue.put(update_ui)
+                    # 使用輔助函數在主線程執行更新
+                    invoke_on_main_thread(update_ui)
                 
                 download_and_transpose(url, semitones, progress_callback, output_dir, tempo_val, rate_val, bpm_val)
                 # 成功完成
@@ -402,15 +418,8 @@ def main(page: ft.Page):
                     status_text.color = COLORS['success']
                     page.update()
                 
-                # 使用 page.invoke_later() 或 page.call_later() 在主線程執行更新
-                if hasattr(page, 'invoke_later'):
-                    page.invoke_later(update_success)
-                elif hasattr(page, 'call_later'):
-                    page.call_later(0.0, update_success)
-                else:
-                    # 備選方案：使用隊列機制
-                    update_queue.put(update_success)
-                    start_update_timer()
+                # 使用輔助函數在主線程執行更新
+                invoke_on_main_thread(update_success)
             except Exception as e:
                 def update_error():
                     progress_bar.value = 0
@@ -420,15 +429,8 @@ def main(page: ft.Page):
                     status_text.color = COLORS['danger']
                     page.update()
                 
-                # 使用 page.invoke_later() 或 page.call_later() 在主線程執行更新
-                if hasattr(page, 'invoke_later'):
-                    page.invoke_later(update_error)
-                elif hasattr(page, 'call_later'):
-                    page.call_later(0.0, update_error)
-                else:
-                    # 備選方案：使用隊列機制
-                    update_queue.put(update_error)
-                    start_update_timer()
+                # 使用輔助函數在主線程執行更新
+                invoke_on_main_thread(update_error)
         
         thread = threading.Thread(target=work)
         thread.daemon = True

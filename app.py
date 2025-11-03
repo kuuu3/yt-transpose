@@ -1,6 +1,8 @@
 import flet as ft
 import threading
+import queue
 import os
+import logging
 import tkinter as tk
 from tkinter import filedialog
 from transposer_core import download_and_transpose, get_default_output_dir
@@ -34,6 +36,47 @@ def main(page: ft.Page):
     
     # 使用預設輸出目錄
     default_output_dir = get_default_output_dir()
+    
+    # 創建更新隊列（用於線程安全的 UI 更新）
+    update_queue = queue.Queue()
+    
+    # 處理隊列中的更新請求
+    def process_updates():
+        try:
+            while True:
+                update_func = update_queue.get_nowait()
+                update_func()
+        except queue.Empty:
+            pass
+        try:
+            page.update()
+        except AssertionError:
+            # Flet 要求在主線程中更新，這個錯誤是預期的
+            pass
+        except Exception as e:
+            # 記錄其他意外的錯誤
+            logging.error(f"更新頁面時發生錯誤: {e}", exc_info=True)
+    
+    # 使用定時器定期處理更新隊列
+    update_timer_running = False
+    
+    def schedule_update():
+        nonlocal update_timer_running
+        if not update_timer_running:
+            return
+        process_updates()
+        # 使用 threading.Timer 定期檢查更新隊列（每 100ms）
+        threading.Timer(0.1, schedule_update).start()
+    
+    def start_update_timer():
+        nonlocal update_timer_running
+        if not update_timer_running:
+            update_timer_running = True
+            schedule_update()
+    
+    def stop_update_timer():
+        nonlocal update_timer_running
+        update_timer_running = False
     
     # 全局 tkinter 根視窗（用於文件對話框，避免重複創建）
     tk_root = None
@@ -152,8 +195,12 @@ def main(page: ft.Page):
         value_text.value = str(transpose_value)
         try:
             page.update()
-        except:
+        except AssertionError:
+            # Flet 要求在主線程中更新，這個錯誤是預期的
             pass
+        except Exception as e:
+            # 記錄其他意外的錯誤
+            logging.error(f"更新 transpose 時發生錯誤: {e}", exc_info=True)
     
     def update_pitch(value, value_text, freq_text):
         nonlocal pitch_value
@@ -164,8 +211,12 @@ def main(page: ft.Page):
         freq_text.value = f"{freq:.2f} Hz"  # 頻率也顯示 2 位小數以反映更精確的調整
         try:
             page.update()
-        except:
+        except AssertionError:
+            # Flet 要求在主線程中更新，這個錯誤是預期的
             pass
+        except Exception as e:
+            # 記錄其他意外的錯誤
+            logging.error(f"更新 pitch 時發生錯誤: {e}", exc_info=True)
     
     def update_speed(value, value_text, unit_text, mode):
         nonlocal speed_value, speed_mode
@@ -180,8 +231,12 @@ def main(page: ft.Page):
             unit_text.value = "%"
         try:
             page.update()
-        except:
+        except AssertionError:
+            # Flet 要求在主線程中更新，這個錯誤是預期的
             pass
+        except Exception as e:
+            # 記錄其他意外的錯誤
+            logging.error(f"更新 speed 時發生錯誤: {e}", exc_info=True)
     
     def change_speed_mode():
         nonlocal speed_value, speed_mode
@@ -223,8 +278,12 @@ def main(page: ft.Page):
         transpose_value_text.value = "0"
         try:
             page.update()
-        except:
+        except AssertionError:
+            # Flet 要求在主線程中更新，這個錯誤是預期的
             pass
+        except Exception as e:
+            # 記錄其他意外的錯誤
+            logging.error(f"重置 transpose 時發生錯誤: {e}", exc_info=True)
     
     def reset_pitch():
         nonlocal pitch_value
@@ -234,8 +293,12 @@ def main(page: ft.Page):
         pitch_freq_text.value = "440.0 Hz"
         try:
             page.update()
-        except:
+        except AssertionError:
+            # Flet 要求在主線程中更新，這個錯誤是預期的
             pass
+        except Exception as e:
+            # 記錄其他意外的錯誤
+            logging.error(f"重置 pitch 時發生錯誤: {e}", exc_info=True)
     
     def reset_speed():
         nonlocal speed_value
@@ -252,8 +315,12 @@ def main(page: ft.Page):
             speed_unit_text.value = "%"
         try:
             page.update()
-        except:
+        except AssertionError:
+            # Flet 要求在主線程中更新，這個錯誤是預期的
             pass
+        except Exception as e:
+            # 記錄其他意外的錯誤
+            logging.error(f"重置 speed 時發生錯誤: {e}", exc_info=True)
     
     def start_process():
         url = url_field.value.strip()
@@ -309,8 +376,7 @@ def main(page: ft.Page):
                         progress_bar.value = value / 100.0
                         status_text.value = msg
                         status_text.color = COLORS['text_muted']
-                        page.update()
-                    page.invoke_later(update_ui)
+                    update_queue.put(update_ui)
                 
                 download_and_transpose(url, semitones, progress_callback, output_dir, tempo_val, rate_val, bpm_val)
                 # 成功完成
@@ -319,8 +385,7 @@ def main(page: ft.Page):
                     start_button.bgcolor = COLORS['success']
                     status_text.value = f"完成！檔案已儲存至：{output_dir}"
                     status_text.color = COLORS['success']
-                    page.update()
-                page.invoke_later(update_success)
+                update_queue.put(update_success)
             except Exception as e:
                 def update_error():
                     progress_bar.value = 0
@@ -328,8 +393,10 @@ def main(page: ft.Page):
                     start_button.bgcolor = COLORS['success']
                     status_text.value = f"錯誤：{str(e)}"
                     status_text.color = COLORS['danger']
-                    page.update()
-                page.invoke_later(update_error)
+                update_queue.put(update_error)
+        
+        # 啟動定時器來定期處理更新隊列
+        start_update_timer()
         
         thread = threading.Thread(target=work)
         thread.daemon = True
@@ -550,8 +617,9 @@ def main(page: ft.Page):
             if tk_root:
                 try:
                     tk_root.update_idletasks()
-                except:
-                    pass
+                except Exception as e:
+                    # 記錄 tkinter 更新錯誤
+                    logging.error(f"更新 tkinter 視窗時發生錯誤: {e}", exc_info=True)
     
     browse_btn = ft.ElevatedButton(
         text="瀏覽",

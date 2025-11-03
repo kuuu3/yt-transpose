@@ -1,51 +1,52 @@
 @echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 
 echo ====================================
-echo YouTube 音檔轉調工具
+echo YouTube Audio Transpose Tool
 echo ====================================
 echo.
 
-REM 檢查 Python 是否安裝（嘗試 python 和 py 兩種命令）
 python --version >nul 2>&1
-if errorlevel 1 (
-    py --version >nul 2>&1
-    if errorlevel 1 (
-        echo [錯誤] 找不到 Python，請先安裝 Python 3.8 或更高版本
-        echo 下載連結：https://www.python.org/downloads/
-        pause
-        exit /b 1
-    )
-    set PYTHON_CMD=py
-) else (
+if %errorlevel% equ 0 (
     set PYTHON_CMD=python
+    goto :check_python_done
 )
 
-echo [OK] Python 已安裝
+py --version >nul 2>&1
+if %errorlevel% equ 0 (
+    set PYTHON_CMD=py
+    goto :check_python_done
+)
+
+echo [ERROR] Python not found. Please install Python 3.8 or higher
+echo Download: https://www.python.org/downloads/
+pause
+exit /b 1
+
+:check_python_done
+echo [OK] Python installed
 %PYTHON_CMD% --version
 
-REM 檢查並設置環境
 echo.
-echo 正在檢查環境...
+echo Checking environment...
 %PYTHON_CMD% setup_env.py
-if errorlevel 1 (
+if not %errorlevel% equ 0 (
     echo.
-    echo [錯誤] 環境設置失敗，請檢查上述錯誤訊息
+    echo [ERROR] Environment setup failed. Please check error messages above.
     pause
     exit /b 1
 )
 
 echo.
-echo 正在啟動應用程式...
+echo Starting application...
 %PYTHON_CMD% app.py
 
-if errorlevel 1 (
+if not %errorlevel% equ 0 (
     echo.
-    echo [錯誤] 應用程式執行錯誤
+    echo [ERROR] Application execution failed.
     pause
     exit /b 1
 )
 
-exit
-
+exit /b 0

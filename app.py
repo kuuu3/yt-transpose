@@ -281,7 +281,7 @@ def main(page: ft.Page):
         if pitch_value != 0.0:
             semitones = float(pitch_value)
         else:
-            semitones = int(transpose_slider.value)
+            semitones = round(transpose_slider.value)
         tempo_val = None
         rate_val = None
         bpm_val = None
@@ -305,34 +305,31 @@ def main(page: ft.Page):
         def work():
             try:
                 def progress_callback(value, msg):
-                    progress_bar.value = value / 100.0
-                    status_text.value = msg
-                    status_text.color = COLORS['text_muted']
-                    try:
+                    def update_ui():
+                        progress_bar.value = value / 100.0
+                        status_text.value = msg
+                        status_text.color = COLORS['text_muted']
                         page.update()
-                    except:
-                        pass
+                    page.invoke_later(update_ui)
                 
                 download_and_transpose(url, semitones, progress_callback, output_dir, tempo_val, rate_val, bpm_val)
                 # 成功完成
-                start_button.disabled = False
-                start_button.bgcolor = COLORS['success']
-                status_text.value = f"完成！檔案已儲存至：{output_dir}"
-                status_text.color = COLORS['success']
-                try:
+                def update_success():
+                    start_button.disabled = False
+                    start_button.bgcolor = COLORS['success']
+                    status_text.value = f"完成！檔案已儲存至：{output_dir}"
+                    status_text.color = COLORS['success']
                     page.update()
-                except:
-                    pass
+                page.invoke_later(update_success)
             except Exception as e:
-                progress_bar.value = 0
-                start_button.disabled = False
-                start_button.bgcolor = COLORS['success']
-                status_text.value = f"錯誤：{str(e)}"
-                status_text.color = COLORS['danger']
-                try:
+                def update_error():
+                    progress_bar.value = 0
+                    start_button.disabled = False
+                    start_button.bgcolor = COLORS['success']
+                    status_text.value = f"錯誤：{str(e)}"
+                    status_text.color = COLORS['danger']
                     page.update()
-                except:
-                    pass
+                page.invoke_later(update_error)
         
         thread = threading.Thread(target=work)
         thread.daemon = True

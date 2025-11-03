@@ -27,3 +27,9 @@ soundstretch-*/
 *.swo
 *~
 
+# PyInstaller 打包產物
+build/
+dist/
+*.spec
+*.exe
+

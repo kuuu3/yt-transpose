@@ -204,7 +204,12 @@ def main(page: ft.Page):
     
     def update_pitch(value, value_text, freq_text):
         nonlocal pitch_value
-        pitch_value = float(value)
+        # 正規化pitch值：四捨五入到2位小數，並將接近零的值設為零
+        raw_value = float(value)
+        pitch_value = round(raw_value, 2)
+        # 如果值非常接近零（小於0.01），設為零以避免不必要的處理
+        if abs(pitch_value) < 0.01:
+            pitch_value = 0.0
         value_text.value = f"{pitch_value:.2f}"  # 顯示 2 位小數（0.01 半音精度）
         # 計算對應的頻率（以 A4=440Hz 為基準）
         freq = 440.0 * (2 ** (pitch_value / 12))
@@ -345,6 +350,7 @@ def main(page: ft.Page):
         
         # 取得處理參數（優先使用 pitch，如果為 0 則使用 transpose）
         # 如果 pitch 有設定，使用 pitch；否則使用 transpose
+        # 注意：pitch_value 已經在 update_pitch() 中正規化，接近零的值已設為 0.0
         if pitch_value != 0.0:
             semitones = float(pitch_value)
         else:
@@ -376,7 +382,16 @@ def main(page: ft.Page):
                         progress_bar.value = value / 100.0
                         status_text.value = msg
                         status_text.color = COLORS['text_muted']
-                    update_queue.put(update_ui)
+                        page.update()
+                    
+                    # 使用 page.invoke_later() 或 page.call_later() 在主線程執行更新
+                    if hasattr(page, 'invoke_later'):
+                        page.invoke_later(update_ui)
+                    elif hasattr(page, 'call_later'):
+                        page.call_later(0.0, update_ui)
+                    else:
+                        # 備選方案：使用隊列機制
+                        update_queue.put(update_ui)
                 
                 download_and_transpose(url, semitones, progress_callback, output_dir, tempo_val, rate_val, bpm_val)
                 # 成功完成
@@ -385,7 +400,17 @@ def main(page: ft.Page):
                     start_button.bgcolor = COLORS['success']
                     status_text.value = f"完成！檔案已儲存至：{output_dir}"
                     status_text.color = COLORS['success']
-                update_queue.put(update_success)
+                    page.update()
+                
+                # 使用 page.invoke_later() 或 page.call_later() 在主線程執行更新
+                if hasattr(page, 'invoke_later'):
+                    page.invoke_later(update_success)
+                elif hasattr(page, 'call_later'):
+                    page.call_later(0.0, update_success)
+                else:
+                    # 備選方案：使用隊列機制
+                    update_queue.put(update_success)
+                    start_update_timer()
             except Exception as e:
                 def update_error():
                     progress_bar.value = 0
@@ -393,10 +418,17 @@ def main(page: ft.Page):
                     start_button.bgcolor = COLORS['success']
                     status_text.value = f"錯誤：{str(e)}"
                     status_text.color = COLORS['danger']
-                update_queue.put(update_error)
-        
-        # 啟動定時器來定期處理更新隊列
-        start_update_timer()
+                    page.update()
+                
+                # 使用 page.invoke_later() 或 page.call_later() 在主線程執行更新
+                if hasattr(page, 'invoke_later'):
+                    page.invoke_later(update_error)
+                elif hasattr(page, 'call_later'):
+                    page.call_later(0.0, update_error)
+                else:
+                    # 備選方案：使用隊列機制
+                    update_queue.put(update_error)
+                    start_update_timer()
         
         thread = threading.Thread(target=work)
         thread.daemon = True

@@ -13,21 +13,53 @@ yt_transpose/
 ├── batch_transpose.py  # 批次處理
 ├── urls.txt            # 批次檔案（多個連結）
 ├── requirements.txt    # Python 套件
-├── run.bat             # Windows 一鍵啟動（呼叫 run.vbs）
-├── run.vbs             # VBScript 啟動腳本（無視窗）
-├── soundstretch.exe    # SoundTouch CLI（自動下載）
-└── downloads/          # 音檔輸出目錄
+├── start.bat             # Windows 一鍵啟動（呼叫 run.vbs）
+└── soundstretch.exe    # SoundTouch CLI（自動下載）
 ```
 
 ##  快速開始
 
+### 系統需求
+
+- Windows 10 或更高版本
+- Python 3.8 或更高版本（需先安裝）
+
 ### Windows 使用者
 
-直接雙擊 **`run.bat`** 即可啟動 GUI 介面！
+**方法一：一鍵啟動（推薦）**
+
+直接雙擊 **`start.bat`** 即可啟動 GUI 介面！
+
+**方法二：命令列啟動**
+
+1. 開啟命令提示字元（CMD）或 PowerShell
+2. 切換到專案目錄
+3. 執行：`python start.bat` 或 `python app.py`
+
+**如果啟動沒反應或出現錯誤：**
+
+- 確認已安裝 Python 3.8 或更高版本
+- 檢查是否有錯誤訊息顯示在命令列視窗
+- 首次執行需要安裝依賴套件（見下方）
 
 ### 首次安裝
 
-執行自動安裝腳本（會自動下載並安裝所有依賴）：
+**步驟 1：安裝 Python 依賴套件**
+
+在命令列中執行：
+
+```bash
+pip install -r requirements.txt
+```
+
+這會安裝以下套件：
+- `yt-dlp`：YouTube 下載器
+- `imageio-ffmpeg`：音訊格式轉換
+- `flet`：GUI 介面
+
+**步驟 2：檢查環境設置**
+
+執行自動安裝腳本（會自動下載 `soundstretch.exe`）：
 
 ```bash
 python setup_env.py

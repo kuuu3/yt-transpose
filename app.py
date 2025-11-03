@@ -23,7 +23,7 @@ COLORS = {
 def main(page: ft.Page):
     page.title = "YouTube 音檔轉調工具"
     page.window.width = 380
-    page.window.height = 780
+    page.window.height = 680
     page.window.resizable = False
     page.window.center()
     page.bgcolor = COLORS['bg']
@@ -34,6 +34,9 @@ def main(page: ft.Page):
     
     # 使用預設輸出目錄
     default_output_dir = get_default_output_dir()
+    
+    # 全局 tkinter 根視窗（用於文件對話框，避免重複創建）
+    tk_root = None
     
     # 控制變數
     transpose_value = 0
@@ -76,7 +79,7 @@ def main(page: ft.Page):
     pitch_slider = ft.Slider(
         min=-12.0,
         max=12.0,
-        divisions=240,
+        divisions=2400,  # 提高精度到 0.01 半音（1 cent）
         value=0.0,
         expand=True,
         active_color=COLORS['accent'],
@@ -155,10 +158,10 @@ def main(page: ft.Page):
     def update_pitch(value, value_text, freq_text):
         nonlocal pitch_value
         pitch_value = float(value)
-        value_text.value = f"{pitch_value:.2f}"
+        value_text.value = f"{pitch_value:.2f}"  # 顯示 2 位小數（0.01 半音精度）
         # 計算對應的頻率（以 A4=440Hz 為基準）
         freq = 440.0 * (2 ** (pitch_value / 12))
-        freq_text.value = f"{freq:.1f} Hz"
+        freq_text.value = f"{freq:.2f} Hz"  # 頻率也顯示 2 位小數以反映更精確的調整
         try:
             page.update()
         except:
@@ -273,8 +276,12 @@ def main(page: ft.Page):
             output_dir = get_default_output_dir()
             output_dir_field.value = output_dir
         
-        # 取得處理參數
-        semitones = int(transpose_slider.value)
+        # 取得處理參數（優先使用 pitch，如果為 0 則使用 transpose）
+        # 如果 pitch 有設定，使用 pitch；否則使用 transpose
+        if pitch_value != 0.0:
+            semitones = float(pitch_value)
+        else:
+            semitones = int(transpose_slider.value)
         tempo_val = None
         rate_val = None
         bpm_val = None
@@ -410,12 +417,12 @@ def main(page: ft.Page):
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
     
     def pitch_minus_click(e):
-        new_value = max(-12.0, pitch_slider.value - 0.1)
+        new_value = max(-12.0, round(pitch_slider.value - 0.01, 2))  # 每次調整 0.01 半音
         pitch_slider.value = new_value
         update_pitch(new_value, pitch_value_text, pitch_freq_text)
     
     def pitch_plus_click(e):
-        new_value = min(12.0, pitch_slider.value + 0.1)
+        new_value = min(12.0, round(pitch_slider.value + 0.01, 2))  # 每次調整 0.01 半音
         pitch_slider.value = new_value
         update_pitch(new_value, pitch_value_text, pitch_freq_text)
     
@@ -512,11 +519,13 @@ def main(page: ft.Page):
     # 瀏覽按鈕 - 選擇目錄
     def browse_output_dir(e):
         # 使用 tkinter 的文件對話框選擇目錄
+        nonlocal tk_root
         try:
-            # 創建一個隱藏的 tkinter 根視窗
-            root = tk.Tk()
-            root.withdraw()  # 隱藏主視窗
-            root.attributes('-topmost', True)  # 置頂
+            # 只在需要時創建 tkinter 根視窗
+            if tk_root is None:
+                tk_root = tk.Tk()
+                tk_root.withdraw()  # 隱藏主視窗
+                tk_root.attributes('-topmost', False)  # 不置頂，避免干擾
             
             # 獲取當前輸出目錄作為初始目錄
             initial_dir = output_dir_field.value
@@ -526,11 +535,9 @@ def main(page: ft.Page):
             # 打開目錄選擇對話框
             selected_dir = filedialog.askdirectory(
                 title="選擇輸出目錄",
-                initialdir=initial_dir
+                initialdir=initial_dir,
+                parent=tk_root
             )
-            
-            # 銷毀 tkinter 根視窗
-            root.destroy()
             
             if selected_dir:
                 output_dir_field.value = selected_dir
@@ -541,6 +548,13 @@ def main(page: ft.Page):
             status_text.value = f"選擇目錄時發生錯誤：{str(ex)}"
             status_text.color = COLORS['danger']
             page.update()
+        finally:
+            # 確保視窗被正確處理
+            if tk_root:
+                try:
+                    tk_root.update_idletasks()
+                except:
+                    pass
     
     browse_btn = ft.ElevatedButton(
         text="瀏覽",

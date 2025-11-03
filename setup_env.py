@@ -48,7 +48,7 @@ def download_soundstretch():
         shutil.rmtree(temp_dir, ignore_errors=True)
         return False
 
-# Check ffmpeg availability (使用 imageio-ffmpeg，不需要複製到本地)
+# Check ffmpeg availability (使用 imageio-ffmpeg)
 try:
     import imageio_ffmpeg
     ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
@@ -106,8 +106,6 @@ else:
                 if choice.lower() != 'y':
                     sys.exit(1)
             else:
-                # 非互動模式（由 run.vbs 調用），直接繼續，不等待輸入
                 print("\n[WARNING] soundstretch not found, but continuing anyway...")
                 print("請手動下載 soundstretch.exe 並放置在此目錄以使用完整功能")
-                # 不退出，讓 app.py 可以正常啟動
 

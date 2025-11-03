@@ -1,13 +1,9 @@
 import flet as ft
 import threading
 import os
-import json
 import tkinter as tk
 from tkinter import filedialog
 from transposer_core import download_and_transpose, get_default_output_dir
-
-# 配置文件路徑
-CONFIG_FILE = "config.json"
 
 # 顏色方案（與 app.py 保持一致）
 COLORS = {
@@ -24,24 +20,6 @@ COLORS = {
     'border': '#555555',
 }
 
-def load_config():
-    """載入設定"""
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            pass
-    return {"output_dir": get_default_output_dir()}
-
-def save_config(config):
-    """儲存設定"""
-    try:
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
-    except:
-        pass
-
 def main(page: ft.Page):
     page.title = "YouTube 音檔轉調工具"
     page.window.width = 380
@@ -54,9 +32,7 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.update()
     
-    # 載入設定（但不使用保存的輸出目錄，每次都使用預設值）
-    # config = load_config()
-    # default_output_dir = config.get("output_dir", get_default_output_dir())
+    # 使用預設輸出目錄
     default_output_dir = get_default_output_dir()
     
     # 控制變數
@@ -534,27 +510,6 @@ def main(page: ft.Page):
     )
     
     # 瀏覽按鈕 - 選擇目錄
-    def pick_files_result(e: ft.FilePickerResultEvent):
-        if e.path:
-            selected_path = e.path
-            # 如果選擇的是文件，取其目錄
-            if os.path.isfile(selected_path):
-                selected_path = os.path.dirname(selected_path)
-            elif not os.path.isdir(selected_path):
-                # 嘗試使用父目錄
-                selected_path = os.path.dirname(selected_path)
-            
-            if os.path.isdir(selected_path):
-                output_dir_field.value = selected_path
-                # 更新配置
-                config = load_config()
-                config["output_dir"] = selected_path
-                save_config(config)
-                page.update()
-    
-    file_picker = ft.FilePicker(on_result=pick_files_result)
-    page.overlay.append(file_picker)
-    
     def browse_output_dir(e):
         # 使用 tkinter 的文件對話框選擇目錄
         try:
@@ -579,10 +534,6 @@ def main(page: ft.Page):
             
             if selected_dir:
                 output_dir_field.value = selected_dir
-                # 不保存到配置檔案，每次啟動都使用預設值
-                # config = load_config()
-                # config["output_dir"] = selected_dir
-                # save_config(config)
                 status_text.value = f"已設定輸出目錄：{selected_dir}"
                 status_text.color = COLORS['success']
                 page.update()

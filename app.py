@@ -3,6 +3,7 @@ import threading
 import queue
 import os
 import logging
+import re
 import tkinter as tk
 from tkinter import filedialog
 from transposer_core import download_and_transpose, get_default_output_dir
@@ -346,10 +347,31 @@ def main(page: ft.Page):
             # 記錄其他意外的錯誤
             logging.error(f"重置 speed 時發生錯誤: {e}", exc_info=True)
     
+    def is_valid_youtube_url(url):
+        """檢查是否為有效的 YouTube URL 格式"""
+        if not url:
+            return False
+        # 檢查常見的 YouTube URL 格式
+        youtube_patterns = [
+            r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+            r'(?:https?://)?(?:www\.)?youtu\.be/[\w-]+',
+            r'(?:https?://)?(?:www\.)?youtube\.com/embed/[\w-]+',
+            r'(?:https?://)?(?:www\.)?youtube\.com/v/[\w-]+',
+            r'(?:https?://)?(?:www\.)?youtube\.com/.*[\?&]v=[\w-]+',
+        ]
+        return any(re.search(pattern, url, re.IGNORECASE) for pattern in youtube_patterns)
+    
     def start_process():
         url = url_field.value.strip()
         if not url:
             status_text.value = "請輸入 YouTube 連結"
+            status_text.color = COLORS['danger']
+            page.update()
+            return
+        
+        # 驗證 URL 格式
+        if not is_valid_youtube_url(url):
+            status_text.value = "請輸入有效的 YouTube 連結（例如：https://www.youtube.com/watch?v=...）"
             status_text.color = COLORS['danger']
             page.update()
             return
@@ -411,10 +433,13 @@ def main(page: ft.Page):
         def work():
             try:
                 def progress_callback(value, msg):
-                    def update_ui():
+                    # 將參數作為局部變量捕獲，避免閉包問題
+                    progress_value = value
+                    progress_msg = msg
+                    def update_ui(progress_val=progress_value, progress_text=progress_msg):
                         try:
-                            progress_bar.value = value / 100.0
-                            status_text.value = msg
+                            progress_bar.value = progress_val / 100.0
+                            status_text.value = progress_text
                             status_text.color = COLORS['text_muted']
                             page.update()
                         except AssertionError:
@@ -429,11 +454,13 @@ def main(page: ft.Page):
                 
                 download_and_transpose(url, semitones, progress_callback, output_dir, tempo_val, rate_val, bpm_val)
                 # 成功完成
-                def update_success():
+                # 將 output_dir 作為局部變量捕獲，避免閉包問題
+                output_dir_final = output_dir
+                def update_success(output_path=output_dir_final):
                     try:
                         start_button.disabled = False
                         start_button.bgcolor = COLORS['success']
-                        status_text.value = f"完成！檔案已儲存至：{output_dir}"
+                        status_text.value = f"完成！檔案已儲存至：{output_path}"
                         status_text.color = COLORS['success']
                         page.update()
                     except AssertionError:
@@ -447,14 +474,16 @@ def main(page: ft.Page):
                 invoke_on_main_thread(update_success)
             except Exception as e:
                 # 記錄錯誤
+                error_msg = str(e)
                 logging.error(f"下載處理失敗: {e}", exc_info=True)
                 
-                def update_error():
+                def update_error(err=error_msg):
                     try:
                         progress_bar.value = 0
                         start_button.disabled = False
-                        start_button.bgcolor = COLORS['success']
-                        status_text.value = f"錯誤：{str(e)}"
+                        # 錯誤時恢復按鈕到中性顏色（與成功狀態區分開）
+                        start_button.bgcolor = COLORS['entry_bg']
+                        status_text.value = f"錯誤：{err}"
                         status_text.color = COLORS['danger']
                         page.update()
                     except AssertionError:
